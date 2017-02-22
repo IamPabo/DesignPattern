@@ -9,6 +9,13 @@
     <file url="file://$PROJECT_DIR$/designpattern2/src/main/java/com/example/factory/simple/AbstractProduct.java" charset="GBK" />
     <file url="file://$PROJECT_DIR$/designpattern2/src/main/java/com/example/factory/simple/ProductA.java" charset="GBK" />
     <file url="file://$PROJECT_DIR$/designpattern2/src/main/java/com/example/factory/simple/ProductB.java" charset="GBK" />
+    <file url="file://$PROJECT_DIR$/designpattern2/src/main/java/com/example/observable/demo/AllyControlCenter.java" charset="GBK" />
+    <file url="file://$PROJECT_DIR$/designpattern2/src/main/java/com/example/observable/demo/ConcreteAllyControlCenter.java" charset="GBK" />
+    <file url="file://$PROJECT_DIR$/designpattern2/src/main/java/com/example/observable/demo/ObserverClient.java" charset="GBK" />
+    <file url="file://$PROJECT_DIR$/designpattern2/src/main/java/com/example/observable/demo/Player.java" charset="GBK" />
+    <file url="file://$PROJECT_DIR$/designpattern2/src/main/java/com/example/observable/demo2/MyObserver.java" charset="GBK" />
+    <file url="file://$PROJECT_DIR$/designpattern2/src/main/java/com/example/observable/demo2/MyPerson.java" charset="GBK" />
+    <file url="file://$PROJECT_DIR$/designpattern2/src/main/java/com/example/observable/demo2/ObservableClient.java" charset="GBK" />
     <file url="file://$PROJECT_DIR$/designpattern2/src/main/java/com/example/prototype/PrototypeClient.java" charset="GBK" />
     <file url="file://$PROJECT_DIR$/designpattern2/src/main/java/com/example/prototype/PrototypeClient.java" charset="GBK" />
     <file url="file://$PROJECT_DIR$/designpattern2/src/main/java/com/example/singleton/Lazy.java" charset="GBK" />
