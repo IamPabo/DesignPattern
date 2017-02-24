@@ -20,8 +20,17 @@
     <file url="file://$PROJECT_DIR$/designpattern2/src/main/java/com/example/singleton/Lazy.java" charset="GBK" />
     <file url="file://$PROJECT_DIR$/designpattern2/src/main/java/com/example/singleton/Normal.java" charset="GBK" />
     <file url="file://$PROJECT_DIR$/designpattern2/src/main/java/com/example/strategy/StrategyClient.java" charset="GBK" />
+    <file url="file://$PROJECT_DIR$/designpattern2/src/main/java/com/example/strategy/demo/PlaneClient.java" charset="GBK" />
+    <file url="file://$PROJECT_DIR$/designpattern2/src/main/java/com/example/strategy/demo/aircraft/AirPlane.java" charset="GBK" />
+    <file url="file://$PROJECT_DIR$/designpattern2/src/main/java/com/example/strategy/demo/aircraft/Fighter.java" charset="GBK" />
+    <file url="file://$PROJECT_DIR$/designpattern2/src/main/java/com/example/strategy/demo/aircraft/Harrier.java" charset="GBK" />
+    <file url="file://$PROJECT_DIR$/designpattern2/src/main/java/com/example/strategy/demo/aircraft/Helicopter.java" charset="GBK" />
+    <file url="file://$PROJECT_DIR$/designpattern2/src/main/java/com/example/strategy/demo/sonicfly/SubSonicFly.java" charset="GBK" />
+    <file url="file://$PROJECT_DIR$/designpattern2/src/main/java/com/example/strategy/demo/sonicfly/SuperSonicFly.java" charset="GBK" />
+    <file url="file://$PROJECT_DIR$/designpattern2/src/main/java/com/example/strategy/demo/takeoff/LongDistanceTakeOff.java" charset="GBK" />
+    <file url="file://$PROJECT_DIR$/designpattern2/src/main/java/com/example/strategy/demo/takeoff/VerticalTakeOff.java" charset="GBK" />
     <file url="file://$PROJECT_DIR$/designpattern2/src/main/java/com/example/thread/ThreadTest.java" charset="GBK" />
     <file url="file://$PROJECT_DIR$/designpattern2/src/main/java/com/example/thread/threadpool/ThreadPoolTest.java" charset="GBK" />
-    <file url="PROJECT" charset="UTF-8" />
+    <file url="PROJECT" charset="GBK" />
   </component>
 </project>
