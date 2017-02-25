@@ -1,7 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
   <component name="Encoding" defaultCharsetForPropertiesFiles="GBK">
+    <file url="file://$PROJECT_DIR$/app/src/main/java/com/max/pattern/MyAsyncTask.java" charset="GBK" />
     <file url="file://$PROJECT_DIR$/designpattern2/src/main/java/com/example/Client.java" charset="GB2312" />
+    <file url="file://$PROJECT_DIR$/designpattern2/src/main/java/com/example/builder/Actor.java" charset="GBK" />
+    <file url="file://$PROJECT_DIR$/designpattern2/src/main/java/com/example/builder/AngelBuilder.java" charset="GBK" />
+    <file url="file://$PROJECT_DIR$/designpattern2/src/main/java/com/example/builder/DevilBuilder.java" charset="GBK" />
+    <file url="file://$PROJECT_DIR$/designpattern2/src/main/java/com/example/builder/HeroBuilder.java" charset="GBK" />
     <file url="file://$PROJECT_DIR$/designpattern2/src/main/java/com/example/command/BakeChickenWingCommand.java" charset="GBK" />
     <file url="file://$PROJECT_DIR$/designpattern2/src/main/java/com/example/command/BakeMuttonCommand.java" charset="GBK" />
     <file url="file://$PROJECT_DIR$/designpattern2/src/main/java/com/example/command/Barbecuer.java" charset="GBK" />
@@ -31,6 +36,6 @@
     <file url="file://$PROJECT_DIR$/designpattern2/src/main/java/com/example/strategy/demo/takeoff/VerticalTakeOff.java" charset="GBK" />
     <file url="file://$PROJECT_DIR$/designpattern2/src/main/java/com/example/thread/ThreadTest.java" charset="GBK" />
     <file url="file://$PROJECT_DIR$/designpattern2/src/main/java/com/example/thread/threadpool/ThreadPoolTest.java" charset="GBK" />
-    <file url="PROJECT" charset="GBK" />
+    <file url="PROJECT" charset="UTF-8" />
   </component>
 </project>
