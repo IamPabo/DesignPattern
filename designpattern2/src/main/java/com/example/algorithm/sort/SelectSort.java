@@ -14,10 +14,9 @@ class SelectSort {
     static int[] selectSort(int[] arr) {
         int position;
         for (int i = 0; i < arr.length; i++) {
-            int j = i + 1;
             position = i;
             int temp = arr[i];
-            for (; j < arr.length; j++) {
+            for (int j = i + 1; j < arr.length; j++) {
                 if (arr[j] < temp) {
                     temp = arr[j];
                     position = j;
