@@ -3,10 +3,10 @@ package com.example.algorithm.sort;
 import java.util.Arrays;
 
 /**
- * å†’æ³¡æ’åº
- * åŸºæœ¬æ€æƒ³ ï¼š åŸºæœ¬æ€æƒ³ï¼šåœ¨è¦æ’åºçš„ä¸€ç»„æ•°ä¸­ï¼Œå¯¹å½“å‰è¿˜æœªæ’å¥½åºçš„èŒƒå›´å†…çš„å…¨éƒ¨æ•°ï¼Œ
- * è‡ªä¸Šè€Œä¸‹å¯¹ç›¸é‚»çš„ä¸¤ä¸ªæ•°ä¾æ¬¡è¿›è¡Œæ¯”è¾ƒå’Œè°ƒæ•´ï¼Œè®©è¾ƒå¤§çš„æ•°å¾€ä¸‹æ²‰ï¼Œè¾ƒå°çš„å¾€ä¸Šå†’ã€‚
- * å³ï¼šæ¯å½“ä¸¤ç›¸é‚»çš„æ•°æ¯”è¾ƒåå‘ç°å®ƒä»¬çš„æ’åºä¸æ’åºè¦æ±‚ç›¸åæ—¶ï¼Œå°±å°†å®ƒä»¬äº’æ¢ã€‚
+ * Ã°ÅİÅÅĞò
+ * »ù±¾Ë¼Ïë £º »ù±¾Ë¼Ïë£ºÔÚÒªÅÅĞòµÄÒ»×éÊıÖĞ£¬¶Ôµ±Ç°»¹Î´ÅÅºÃĞòµÄ·¶Î§ÄÚµÄÈ«²¿Êı£¬
+ * ×ÔÉÏ¶øÏÂ¶ÔÏàÁÚµÄÁ½¸öÊıÒÀ´Î½øĞĞ±È½ÏºÍµ÷Õû£¬ÈÃ½Ï´óµÄÊıÍùÏÂ³Á£¬½ÏĞ¡µÄÍùÉÏÃ°¡£
+ * ¼´£ºÃ¿µ±Á½ÏàÁÚµÄÊı±È½Ïºó·¢ÏÖËüÃÇµÄÅÅĞòÓëÅÅĞòÒªÇóÏà·´Ê±£¬¾Í½«ËüÃÇ»¥»»¡£
  *
  * @auther MaxLiu
  * @time 2017/2/27
@@ -17,41 +17,90 @@ public class Sort {
     public static final int MIN_TO_MAX = 1;
 
     public static void main(String args[]) {
-        // æµ‹è¯•ç”¨çš„æ–¹æ³•
+        // ²âÊÔÓÃµÄ·½·¨
         int a[] = {1, 54, 6, 3, 78, 34, 12, 45};
-        BubbleSort(a, MIN_TO_MAX);
+        // ¼òµ¥Ñ¡ÔñÅÅĞò
+        SelectSort.selectSort(a);
+        //BubbleSort.bubbleSort(a);// Ã°ÅİÅÅĞò
+        //quickSort(a, 0, a.length - 1);// ¿ìËÙÅÅĞò
     }
 
     /**
-     * å†’æ³¡æ’åº
+     * Ã°ÅİÅÅĞò
+     * Ã°ÅİÅÅĞòËã·¨µÄÔË×÷ÈçÏÂ£º£¨´ÓºóÍùÇ°£©
+     * 1.±È½ÏÏàÁÚµÄÔªËØ¡£Èç¹ûµÚÒ»¸ö±ÈµÚ¶ş¸ö´ó£¬¾Í½»»»ËûÃÇÁ½¸ö¡£
+     * 2.¶ÔÃ¿Ò»¶ÔÏàÁÚÔªËØ×÷Í¬ÑùµÄ¹¤×÷£¬´Ó¿ªÊ¼µÚÒ»¶Ôµ½½áÎ²µÄ×îºóÒ»¶Ô¡£ÔÚÕâÒ»µã£¬×îºóµÄÔªËØÓ¦¸Ã»áÊÇ×î´óµÄÊı¡£
+     * 3.Õë¶ÔËùÓĞµÄÔªËØÖØ¸´ÒÔÉÏµÄ²½Öè£¬³ıÁË×îºóÒ»¸ö¡£
+     * 4.³ÖĞøÃ¿´Î¶ÔÔ½À´Ô½ÉÙµÄÔªËØÖØ¸´ÉÏÃæµÄ²½Öè£¬Ö±µ½Ã»ÓĞÈÎºÎÒ»¶ÔÊı×ÖĞèÒª±È½Ï¡£
      *
-     * @param a    æ•°ç»„
-     * @param type ä»å¤§åˆ°å°{@link #MAX_TO_MIN}
-     *             ä»å°åˆ°å¤§{@link #MIN_TO_MAX}
+     * @param a Êı×é
      */
-    private static void BubbleSort(int a[], int type) {
-        int temp;
-        if (type == MAX_TO_MIN) {
-            for (int i = 0; i < a.length - 1; i++) { // å–ç¬¬iä¸ªæ•°
-                for (int j = 0; j < a.length - 1 - i; j++) { //
-                    if (a[j] < a[j + 1]) { // ä¸¤æ•°åšå¯¹æ¯”
-                        temp = a[j]; // äº¤æ¢ä¸¤å…ƒç´ 
-                        a[j] = a[j + 1];
-                        a[j + 1] = temp;
-                    }
-                }
-            }
-        } else {
-            for (int i = 0; i < a.length - 1; i++) {
-                for (int j = i + 1; j < a.length - 1 - i; j++) {
-                    if (a[j] > a[j + 1]) {
-                        temp = a[j];
-                        a[j] = a[j + 1];
-                        a[j + 1] = temp;
-                    }
-                }
+
+
+    /**
+     * ¿ìËÙÅÅĞòËã·¨
+     * »ù±¾Ë¼Ïë£ºÑ¡ÔñÒ»¸ö»ù×¼ÔªËØ,Í¨³£Ñ¡ÔñµÚÒ»¸öÔªËØ»òÕß×îºóÒ»¸öÔªËØ,Í¨¹ıÒ»ÌËÉ¨Ãè£¬
+     * ½«´ıÅÅĞòÁĞ·Ö³ÉÁ½²¿·Ö,Ò»²¿·Ö±È»ù×¼ÔªËØĞ¡,Ò»²¿·Ö´óÓÚµÈÓÚ»ù×¼ÔªËØ,´ËÊ±»ù×¼ÔªËØ
+     * ÔÚÆäÅÅºÃĞòºóµÄÕıÈ·Î»ÖÃ,È»ºóÔÙÓÃÍ¬ÑùµÄ·½·¨µİ¹éµØÅÅĞò»®·ÖµÄÁ½²¿·Ö¡£
+     *
+     * @param arr   ÅÅĞòµÄÊı×é
+     * @param start ¿ªÊ¼µÄË÷Òı
+     * @param end   ½áÊøµÄË÷Òı
+     */
+    private static void quickSort(int[] arr, int start, int end) {
+        if (start < end) {
+            // sÊÇ·ÖÁÑÎ»ÖÃ£¬¼´ÅÅĞò½á¹ûĞòÁĞµÄ×îÖÕÎ»ÖÃ
+            int s = HoarePartition(arr, start, end);
+            quickSort(arr, start, s - 1);
+            quickSort(arr, s + 1, start);
+        }
+    }
+
+    /**
+     * ÒÔÊı×éµÚÒ»¸öÔªËØÎªÖĞÖá£¬¶Ô×ÓÊı×é½øĞĞ»®·Ö
+     * ·µ»Ø·ÖÁÑµãÔÚÊı×éÅÅĞò½á¹ûÖĞµÄ×îÖÕÎ»ÖÃ
+     */
+    private static int HoarePartition(int[] arr, int start, int end) {
+        int p = arr[start];
+        int i = start + 1;
+        int j = end;
+        if (i == j) {
+            if (arr[j] >= p) {//´ËÊ±·ÖÁÑµãÓÒ·½Ö»ÓĞÒ»¸öÔªËØ£¬ÇÒ´óÓÚ·ÖÁÑµã´¦Öµ
+                return start;
             }
         }
-        System.out.println(Arrays.toString(a));
+        while (i < j) {
+            while (arr[i] < p) {
+                if (i == end) {
+                    break;
+                }
+                i += 1;
+            }
+            while (arr[j] >= p) {
+                if (j == (start + 1)) {
+                    if (arr[j] >= p) {  //´ËÊ±Îª·ÖÁÑµãÓÒ·½È«²¿ÊÇ´óÓÚµÈÓÚpµÄÔªËØ
+                        System.out.println(Arrays.toString(arr));
+                        return start;
+                    }
+                    break;
+                }
+                j -= 1;
+            }
+            swapArray(arr, i, j);
+        }
+        swapArray(arr, i, j);    //µ±i>=j³·»»×îºóÒ»´Î½»»»
+        swapArray(arr, j, start);
+        System.out.println(Arrays.toString(arr));
+        return j;
     }
+
+    /**
+     * ½»»»Êı×éÖĞÁ½¸ö²»Í¬Î»ÖÃÉÏµÄÔªËØÖµ
+     */
+    private static void swapArray(int[] arr, int m, int n) {
+        int temp = arr[m];
+        arr[m] = arr[n];
+        arr[n] = temp;
+    }
+
 }
