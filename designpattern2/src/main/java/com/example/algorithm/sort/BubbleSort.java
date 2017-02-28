@@ -17,7 +17,7 @@ import java.util.Arrays;
 class BubbleSort {
 
     static void bubbleSort(int[] a) {
-        System.out.println("=======冒泡排序========\n");
+        System.out.println("=======冒泡排序================\n");
         int temp = 0;
         for (int i = 0; i < a.length - 1; i++) { // 取第i个数
             for (int j = 0; j < a.length - 1 - i; j++) { //

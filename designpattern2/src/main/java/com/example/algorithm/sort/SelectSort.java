@@ -12,6 +12,7 @@ package com.example.algorithm.sort;
 class SelectSort {
 
     static int[] selectSort(int[] arr) {
+        System.out.println("=======简单选择排序===============\n");
         int position;
         for (int i = 0; i < arr.length; i++) {
             position = i;
