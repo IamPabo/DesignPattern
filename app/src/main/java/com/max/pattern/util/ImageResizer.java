@@ -20,7 +20,11 @@ public class ImageResizer {
     /**
      * 从文件加载图片
      *
-     * @param fd
+     * @param fd 文件描述，当 FileDescriptor 表示某文件时，我们可以通俗的将
+     *           FileDescriptor 看成是该文件。但是，我们不能直接通过
+     *           FileDescriptor 对该文件进行操作；若需要通过 FileDescriptor
+     *           对该文件进行操作，则需要新创建 FileDescriptor 对应的 FileOutputStream
+     *           ，再对文件进行操作。
      * @param reqWidth  目标宽度
      * @param reqHeight 目标高度
      * @return 压缩后的 Bitmap 对象
