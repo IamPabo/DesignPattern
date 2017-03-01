@@ -83,6 +83,12 @@ public class ImageLoader {
     private DiskLruCache diskLruCache;
     private boolean mIsDiskLruCacheCreated = false;
 
+    /**
+     * 获取 ImageLoader 实例
+     *
+     * @param context 上下文
+     * @return ImageLoader 实例
+     */
     public static ImageLoader build(Context context) {
         return new ImageLoader(context);
     }
@@ -103,12 +109,12 @@ public class ImageLoader {
      * 首先先去内存缓存读取图片
      * 如果读取到就直接返回结果
      * <p>
-     * 如果读取不到就调用loadBitmap方法，当图片加载成功后再将图片，
-     * 图片的地址以及需要绑定的imageView封装成一个LoaderResult对象，
-     * 然后再通过mMainHandler向主线程发送一条消息，这样就可以在imageView中设置图片了
-     * 之所以通过Handler中转是因为子线程无法直接更新UI
+     * 如果读取不到就调用{@link #syncBitmap(String, int, int)}方法，当图片加载成功
+     * 后再将图片，图片的地址以及需要绑定的imageView封装成一个{@link LoaderResult}对象，
+     * 然后再通过{@link #mMainHandler}向主线程发送一条消息，这样就可以在imageView
+     * 中设置图片了之所以通过 Handler 中转是因为子线程无法直接更新UI
      * <p>
-     * bindBitmap中用到了线程池和Handler
+     * asyncLoad 中用到了线程池和 Handler
      *
      * @param uri       图片uri
      * @param imageView 载体 ImageView 控件
@@ -118,16 +124,21 @@ public class ImageLoader {
     public void asyncLoad(final String uri, final ImageView imageView,
                           final int reqWidth, final int reqHeight) {
         // 把 uri 作为 tag 绑定到对应的 ImageView 上
+        // 用来解决图片错乱问题
         imageView.setTag(TAG_KEY_URI, uri);
+        // 从内存缓存获取 Bitmap
         Bitmap bitmap = getFromMemory(uri);
         if (bitmap != null) {
             imageView.setImageBitmap(bitmap);
             return;
         }
+        // 如果内存缓存没有，则调用线程池异步加载(多个Runnable实现多个同步加载) Bitmap
         Runnable bitmapTask = new Runnable() {
             @Override
             public void run() {
-                Bitmap bitmap = loadBitmap(uri, reqWidth, reqHeight);
+                // 调用同步加载
+                Bitmap bitmap = syncBitmap(uri, reqWidth, reqHeight);
+                // 通过 Handler 更新 UI
                 if (bitmap != null) {
                     LoaderResult result = new LoaderResult(imageView, uri, bitmap);
                     mMainHandler.obtainMessage(MESSAGE_POST_RESULT, result)
@@ -135,9 +146,66 @@ public class ImageLoader {
                 }
             }
         };
+        // 线程池开启执行（多个线程同时执行）
         THREAD_POOL_EXECUTOR.execute(bitmapTask);
     }
 
+    /**
+     * 同步加载 （不压缩）
+     *
+     * @param uri uri
+     * @return Bitmap对象
+     */
+    public Bitmap syncBitmap(String uri) {
+        return syncBitmap(uri, 0, 0);
+    }
+
+    /**
+     * 同步加载  （从内存缓存、磁盘缓存、网络）
+     * 同步加载的设计步骤：
+     * 先从内存缓存尝试加载图片，找不到就去磁盘缓存拿，磁盘缓存拿不到就去网络拿
+     * 这个方法不能再线程执行，在主线程执行就抛异常（
+     * 有一个检查当前线程的 Looper 是否为主线程的 Looper 的判断）
+     *
+     * @param uri       uri
+     * @param reqWidth  目标宽度
+     * @param reqHeight 目标高度
+     * @return Bitmap对象
+     */
+    public Bitmap syncBitmap(String uri, int reqWidth, int reqHeight) {
+        // 从内存获取
+        Bitmap bitmap = getFromMemory(uri);
+        if (bitmap != null) {
+            Log.d(TAG, "MemoryCache --> { url : " + uri + " }");
+            return bitmap;
+        }
+
+        // 从磁盘获取
+        bitmap = getFromDisk(uri, reqWidth, reqHeight);
+        if (bitmap != null) {
+            Log.d(TAG, "DiskCache --> { url : " + uri + " }");
+            return bitmap;
+        }
+        // 从网络获取并保存到磁盘
+        try {
+            bitmap = loadBitmapFromHttp(uri, reqWidth, reqHeight);
+            Log.d(TAG, "HTTP --> { url:" + uri + " }");
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        // 如果磁盘缓存文件不存在，只从网络获取
+        if (bitmap == null && !mIsDiskLruCacheCreated) {
+            Log.w(TAG, "Warn --> DiskLruCache is not created!!");
+            bitmap = downloadBitmapFromUrl(uri);
+        }
+        return bitmap;
+    }
+
+    /**
+     * 构造方法，初始化
+     *
+     * @param context 上下文
+     */
     private ImageLoader(Context context) {
         memoryCache = new LruCache<String, Bitmap>(cacheSize) {
             @Override
@@ -165,42 +233,6 @@ public class ImageLoader {
                 e.printStackTrace();
             }
         }
-    }
-
-    /**
-     * 同步加载  （从内存缓存、磁盘缓存、网络）
-     * 同步加载的设计步骤：
-     * 先从内存缓存尝试加载图片，找不到就去磁盘缓存拿，磁盘缓存拿不到就去网络拿
-     * 这个方法不能再线程执行，在主线程执行就抛异常（
-     * 有一个检查当前线程的Looper是否为主线程的Looper的判断）
-     *
-     * @param uri       uri
-     * @param reqWidth  目标宽度
-     * @param reqHeight 目标高度
-     * @return Bitmap对象
-     */
-    private Bitmap loadBitmap(String uri, int reqWidth, int reqHeight) {
-        Bitmap bitmap = getFromMemory(uri);
-        if (bitmap != null) {
-            Log.d(TAG, "MemoryCache --> { url : " + uri + " }");
-            return bitmap;
-        }
-        bitmap = getFromDisk(uri, reqWidth, reqHeight);
-        if (bitmap != null) {
-            Log.d(TAG, "DiskCache --> { url : " + uri + " }");
-            return bitmap;
-        }
-        try {
-            bitmap = loadBitmapFromHttp(uri, reqWidth, reqHeight);
-            Log.d(TAG, "HTTP --> { url:" + uri + " }");
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-        if (bitmap == null && !mIsDiskLruCacheCreated) {
-            Log.w(TAG, "Warn --> DiskLruCache is not created!!");
-            bitmap = downloadBitmapFromUrl(uri);
-        }
-        return bitmap;
     }
 
     /**
@@ -319,7 +351,7 @@ public class ImageLoader {
     }
 
     /**
-     * 磁盘缓存的添加
+     * 从网络下载并添加到磁盘缓存
      *
      * @param url       url
      * @param reqWidth  目标宽度
@@ -483,6 +515,7 @@ public class ImageLoader {
             ImageView imageView = result.imageView;
             imageView.setImageBitmap(result.bitmap);
             String uri = (String) imageView.getTag(TAG_KEY_URI);
+            // 用来保证图片不会错乱
             if (uri.equals(result.uri)) {
                 imageView.setImageBitmap(result.bitmap);
             } else {
