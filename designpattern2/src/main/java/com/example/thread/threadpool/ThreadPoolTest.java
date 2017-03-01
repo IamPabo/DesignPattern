@@ -14,8 +14,8 @@ import java.util.concurrent.TimeUnit;
  */
 
 public class ThreadPoolTest {
-    private static final int CORE_POOL_SIZE = 1;
-    private static final int MAX_POOL_SIZE = 3;
+    private static final int CORE_POOL_SIZE = 5;
+    private static final int MAX_POOL_SIZE = 10;
     private static final int BLOCK_POOL_SIZE = 2;
     private static final int ALIVE_POOL_SIZE = 2;
     private static ThreadPoolExecutor executor;
@@ -47,37 +47,45 @@ public class ThreadPoolTest {
          * 4、ThreadPoolExecutor.DiscardOldestPolicy()  丢弃在队列中队首的任务
          */
 
-        for (int i = 0; i < 6; i++) {
+        for (int i = 0; i < 10; i++) {
             try {
-                LOG();
                 executor.execute(new WorkerThread("线程 --> " + i));
-            }catch (Exception e){
+                LOG();
+            } catch (Exception e) {
                 System.out.println("AbortPolicy...");
             }
         }
-        // 10s后，所有任务已经执行完毕，我们在监听一下相关数据
+        executor.shutdown();
+
+        // 所有任务执行完毕后再次打印日志
         new Thread(new Runnable() {
             @Override
             public void run() {
                 try {
-                    Thread.sleep(10 * 1000);
+                    Thread.sleep(1000);
+                    System.out.println("\n\n---------执行完毕---------\n");
                     LOG();
                 } catch (Exception e) {
-
+                    e.printStackTrace();
                 }
             }
         }).start();
     }
-    private static void LOG(){
+
+    /**
+     * 打印 Log 信息
+     */
+    private static void LOG() {
         System.out.println(" ==============线程池===============\n"
-                + "   核心线程 : " + executor.getCorePoolSize()
-                + "   现有线程 : " + executor.getPoolSize()
-                + "   最大执行线程 : " + executor.getMaximumPoolSize()
-                + "   阻塞线程 : " + executor.getActiveCount()
-                + "   任务数量 :" + executor.getTaskCount()
+                + "   线程池中线程数 : " + executor.getPoolSize()
+                + "   等待执行线程数 : " + executor.getQueue().size()
+                + "   所有的任务数 : " + executor.getTaskCount()
+                + "   执行任务的线程数 : " + executor.getActiveCount()
+                + "   执行完毕的任务数 : " + executor.getCompletedTaskCount()
 
         );
     }
+
     // 模拟耗时任务
     public static class WorkerThread implements Runnable {
         private String threadName;
@@ -93,12 +101,10 @@ public class ThreadPoolTest {
             boolean flag = true;
             try {
                 while (flag) {
-                    Thread.sleep(1000);
                     i++;
-                    System.out.println("工作线程 " + threadName + "  " + i);
                     if (i > 2) flag = false;
                 }
-            } catch (InterruptedException e) {
+            } catch (Exception e) {
                 e.printStackTrace();
             }
         }

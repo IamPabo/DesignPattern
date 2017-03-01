@@ -63,19 +63,27 @@ public class ImageLoader {
     private static final int CORE_POOL_SIZE = CPU_COUNT + 1;
     private static final int MAXIMUM_POOL_SIZE = CPU_COUNT * 2 + 1;
     private static final long KEEP_ALIVE = 10L;
-    // 线程工厂
+    // 线程工厂,用于定义线程的一些相同属性（这里用来打印自增长线程 name）
     private static final ThreadFactory sThreadFactory = new ThreadFactory() {
+        // AtomicInteger(1) 表示设置初始 <==> int = 1;
         private final AtomicInteger mCount = new AtomicInteger(1);
 
         public Thread newThread(@NonNull Runnable r) {
+            // public final int get() : 获取当前的值
+            // public final int getAndSet(int newValue) : 取当前的值，并设置新的值
+            // public final int getAndIncrement() : 获取当前的值，并自增
+            // public final int getAndDecrement() : 获取当前的值，并自减
+            // public final int getAndAdd(int delta) : 获取当前的值，并加上预期的值
             return new Thread(r, "ImageLoader#" + mCount.getAndIncrement());
         }
     };
     // 线程池
     private static final Executor THREAD_POOL_EXECUTOR =
             new ThreadPoolExecutor(
-                    CORE_POOL_SIZE, MAXIMUM_POOL_SIZE,
-                    KEEP_ALIVE, TimeUnit.SECONDS,
+                    CORE_POOL_SIZE,
+                    MAXIMUM_POOL_SIZE,
+                    KEEP_ALIVE,
+                    TimeUnit.SECONDS,
                     new LinkedBlockingQueue<Runnable>(),
                     sThreadFactory
             );
@@ -83,6 +91,12 @@ public class ImageLoader {
     private DiskLruCache diskLruCache;
     private boolean mIsDiskLruCacheCreated = false;
 
+    /**
+     * 获取 ImageLoader 实例
+     *
+     * @param context 上下文
+     * @return ImageLoader 实例
+     */
     public static ImageLoader build(Context context) {
         return new ImageLoader(context);
     }
@@ -103,12 +117,12 @@ public class ImageLoader {
      * 首先先去内存缓存读取图片
      * 如果读取到就直接返回结果
      * <p>
-     * 如果读取不到就调用loadBitmap方法，当图片加载成功后再将图片，
-     * 图片的地址以及需要绑定的imageView封装成一个LoaderResult对象，
-     * 然后再通过mMainHandler向主线程发送一条消息，这样就可以在imageView中设置图片了
-     * 之所以通过Handler中转是因为子线程无法直接更新UI
+     * 如果读取不到就调用{@link #syncBitmap(String, int, int)}方法，当图片加载成功
+     * 后再将图片，图片的地址以及需要绑定的imageView封装成一个{@link LoaderResult}对象，
+     * 然后再通过{@link #mMainHandler}向主线程发送一条消息，这样就可以在imageView
+     * 中设置图片了之所以通过 Handler 中转是因为子线程无法直接更新UI
      * <p>
-     * bindBitmap中用到了线程池和Handler
+     * asyncLoad 中用到了线程池和 Handler
      *
      * @param uri       图片uri
      * @param imageView 载体 ImageView 控件
@@ -118,16 +132,21 @@ public class ImageLoader {
     public void asyncLoad(final String uri, final ImageView imageView,
                           final int reqWidth, final int reqHeight) {
         // 把 uri 作为 tag 绑定到对应的 ImageView 上
+        // 用来解决图片错乱问题
         imageView.setTag(TAG_KEY_URI, uri);
+        // 从内存缓存获取 Bitmap
         Bitmap bitmap = getFromMemory(uri);
         if (bitmap != null) {
             imageView.setImageBitmap(bitmap);
             return;
         }
+        // 如果内存缓存没有，则调用线程池异步加载(多个Runnable实现多个同步加载) Bitmap
         Runnable bitmapTask = new Runnable() {
             @Override
             public void run() {
-                Bitmap bitmap = loadBitmap(uri, reqWidth, reqHeight);
+                // 调用同步加载
+                Bitmap bitmap = syncBitmap(uri, reqWidth, reqHeight);
+                // 通过 Handler 更新 UI
                 if (bitmap != null) {
                     LoaderResult result = new LoaderResult(imageView, uri, bitmap);
                     mMainHandler.obtainMessage(MESSAGE_POST_RESULT, result)
@@ -135,9 +154,66 @@ public class ImageLoader {
                 }
             }
         };
+        // 线程池开启执行（多个线程同时执行）
         THREAD_POOL_EXECUTOR.execute(bitmapTask);
     }
 
+    /**
+     * 同步加载 （不压缩）
+     *
+     * @param uri uri
+     * @return Bitmap对象
+     */
+    public Bitmap syncBitmap(String uri) {
+        return syncBitmap(uri, 0, 0);
+    }
+
+    /**
+     * 同步加载  （从内存缓存、磁盘缓存、网络）
+     * 同步加载的设计步骤：
+     * 先从内存缓存尝试加载图片，找不到就去磁盘缓存拿，磁盘缓存拿不到就去网络拿
+     * 这个方法不能再线程执行，在主线程执行就抛异常（
+     * 有一个检查当前线程的 Looper 是否为主线程的 Looper 的判断）
+     *
+     * @param uri       uri
+     * @param reqWidth  目标宽度
+     * @param reqHeight 目标高度
+     * @return Bitmap对象
+     */
+    public Bitmap syncBitmap(String uri, int reqWidth, int reqHeight) {
+        // 从内存缓存获取
+        Bitmap bitmap = getFromMemory(uri);
+        if (bitmap != null) {
+            Log.d(TAG, "MemoryCache --> { url : " + uri + " }");
+            return bitmap;
+        }
+
+        // 从磁盘缓存获取
+        bitmap = getFromDisk(uri, reqWidth, reqHeight);
+        if (bitmap != null) {
+            Log.d(TAG, "DiskCache --> { url : " + uri + " }");
+            return bitmap;
+        }
+        // 从网络获取 I/O 流保存到磁盘缓存
+        try {
+            bitmap = loadBitmapFromHttp(uri, reqWidth, reqHeight);
+            Log.d(TAG, "HTTP --> { url:" + uri + " }");
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        // 如果磁盘缓存文件不存在，从网络直接加载出 Bitmap
+        if (bitmap == null && !mIsDiskLruCacheCreated) {
+            Log.w(TAG, "Warn --> DiskLruCache is not created!!");
+            bitmap = downloadBitmapFromUrl(uri);
+        }
+        return bitmap;
+    }
+
+    /**
+     * 构造方法，初始化
+     *
+     * @param context 上下文
+     */
     private ImageLoader(Context context) {
         memoryCache = new LruCache<String, Bitmap>(cacheSize) {
             @Override
@@ -168,42 +244,6 @@ public class ImageLoader {
     }
 
     /**
-     * 同步加载  （从内存缓存、磁盘缓存、网络）
-     * 同步加载的设计步骤：
-     * 先从内存缓存尝试加载图片，找不到就去磁盘缓存拿，磁盘缓存拿不到就去网络拿
-     * 这个方法不能再线程执行，在主线程执行就抛异常（
-     * 有一个检查当前线程的Looper是否为主线程的Looper的判断）
-     *
-     * @param uri       uri
-     * @param reqWidth  目标宽度
-     * @param reqHeight 目标高度
-     * @return Bitmap对象
-     */
-    private Bitmap loadBitmap(String uri, int reqWidth, int reqHeight) {
-        Bitmap bitmap = getFromMemory(uri);
-        if (bitmap != null) {
-            Log.d(TAG, "MemoryCache --> { url : " + uri + " }");
-            return bitmap;
-        }
-        bitmap = getFromDisk(uri, reqWidth, reqHeight);
-        if (bitmap != null) {
-            Log.d(TAG, "DiskCache --> { url : " + uri + " }");
-            return bitmap;
-        }
-        try {
-            bitmap = loadBitmapFromHttp(uri, reqWidth, reqHeight);
-            Log.d(TAG, "HTTP --> { url:" + uri + " }");
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-        if (bitmap == null && !mIsDiskLruCacheCreated) {
-            Log.w(TAG, "Warn --> DiskLruCache is not created!!");
-            bitmap = downloadBitmapFromUrl(uri);
-        }
-        return bitmap;
-    }
-
-    /**
      * 从 uri 中加载 Bitmap
      *
      * @param uri uri
@@ -220,6 +260,7 @@ public class ImageLoader {
                     urlConnection.getInputStream(),
                     IO_BUFFER_SIZE
             );
+            // 直接从 输入流（读取） 获取Bitmap
             bitmap = BitmapFactory.decodeStream(in);
         } catch (IOException e) {
             e.printStackTrace();
@@ -319,7 +360,7 @@ public class ImageLoader {
     }
 
     /**
-     * 磁盘缓存的添加
+     * 从网络下载并添加到磁盘缓存
      *
      * @param url       url
      * @param reqWidth  目标宽度
@@ -338,15 +379,17 @@ public class ImageLoader {
         }
 
         String key = MD5Util.hashKeyFormUrl(url);
+        // 根据 key 获取 Editor 对象
         DiskLruCache.Editor editor = diskLruCache.edit(key);
         if (editor != null) {
+            // 用 editor 获取输出流
             OutputStream outputStream = editor.newOutputStream(DISK_CACHE_SIZE);
-            if (downloadUrlToStream(url, outputStream)) {
-                editor.commit();
-            } else {
-                editor.abort();
+            if (downloadUrlToStream(url, outputStream)) {// 写入输出流成功
+                editor.commit();// 提交
+            } else { // 写入输出流失败
+                editor.abort(); // 撤销
             }
-            diskLruCache.flush();
+            diskLruCache.flush();// 关闭
         }
         return getFromDisk(url, reqWidth, reqHeight);
     }
@@ -412,19 +455,23 @@ public class ImageLoader {
             URL url = new URL(urlString);
             // 通过 URL 对象获取 HttpURLConnection
             urlConnection = (HttpURLConnection) url.openConnection();
+            // HttpURLConnection 获取 缓冲输入流（BufferedInputStream）
             in = new BufferedInputStream(
                     urlConnection.getInputStream(),
                     IO_BUFFER_SIZE
             );
+            // 传入的 输出流（Editor的输出流） 获取 缓冲输出流（BufferedOutputStream）
             out = new BufferedOutputStream(
                     outputStream,
                     IO_BUFFER_SIZE
             );
             int b;
+            // 如果可以读取文件
             while ((b = in.read()) != -1) {
+                // 文件流写入 缓冲输出流（BufferedOutputStream）
                 out.write(b);
             }
-            return true;
+            return true;// 写入成功
         } catch (Exception e) {
             e.printStackTrace();
         } finally {
@@ -483,6 +530,7 @@ public class ImageLoader {
             ImageView imageView = result.imageView;
             imageView.setImageBitmap(result.bitmap);
             String uri = (String) imageView.getTag(TAG_KEY_URI);
+            // 用来保证图片不会错乱
             if (uri.equals(result.uri)) {
                 imageView.setImageBitmap(result.bitmap);
             } else {
