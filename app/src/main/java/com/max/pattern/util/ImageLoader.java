@@ -4,13 +4,20 @@ import android.annotation.SuppressLint;
 import android.annotation.TargetApi;
 import android.content.Context;
 import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.os.Build;
 import android.os.Environment;
+import android.os.Handler;
 import android.os.Looper;
+import android.os.Message;
 import android.os.StatFs;
+import android.support.annotation.NonNull;
 import android.support.v4.util.LruCache;
+import android.util.Log;
+import android.widget.ImageView;
 
 import com.jakewharton.disklrucache.DiskLruCache;
+import com.max.pattern.R;
 
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
@@ -20,7 +27,14 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
+import java.net.MalformedURLException;
 import java.net.URL;
+import java.util.concurrent.Executor;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * 图片的二级缓存工具类：
@@ -32,6 +46,7 @@ import java.net.URL;
  */
 
 public class ImageLoader {
+    private static final String TAG = "ImageLoader";
     // 获取最大内存
     private static final int maxMemory = (int)
             (Runtime.getRuntime().maxMemory() / 1024);
@@ -40,10 +55,30 @@ public class ImageLoader {
     // 指定磁盘缓存大小 50M
     private static final int DISK_CACHE_SIZE = 1024 * 1024 * 50;
     private static final int IO_BUFFER_SIZE = 8 * 1024;
-    //    // 获取自己的文件夹 /data/data/包名/files 用于存储设备缓存
-//    private static final String FILE_PATH = getFilesDir();
-//    // /data/data/包名/cache 用于内存缓存
-//    private static final String CACHE_PATH = getCacheDir();
+    // ImageView 的 tag key
+    private static final int TAG_KEY_URI = 0xff01;
+    private static final int MESSAGE_POST_RESULT = 0xff11;
+    private static final int CPU_COUNT = Runtime.getRuntime()
+            .availableProcessors();
+    private static final int CORE_POOL_SIZE = CPU_COUNT + 1;
+    private static final int MAXIMUM_POOL_SIZE = CPU_COUNT * 2 + 1;
+    private static final long KEEP_ALIVE = 10L;
+    // 线程工厂
+    private static final ThreadFactory sThreadFactory = new ThreadFactory() {
+        private final AtomicInteger mCount = new AtomicInteger(1);
+
+        public Thread newThread(@NonNull Runnable r) {
+            return new Thread(r, "ImageLoader#" + mCount.getAndIncrement());
+        }
+    };
+    // 线程池
+    public static final Executor THREAD_POOL_EXECUTOR =
+            new ThreadPoolExecutor(
+                    CORE_POOL_SIZE, MAXIMUM_POOL_SIZE,
+                    KEEP_ALIVE, TimeUnit.SECONDS,
+                    new LinkedBlockingQueue<Runnable>(),
+                    sThreadFactory
+            );
     private LruCache<String, Bitmap> memoryCache;
     private DiskLruCache diskLruCache;
     private boolean mIsDiskLruCacheCreated = false;
@@ -78,6 +113,128 @@ public class ImageLoader {
     }
 
     /**
+     * 异步加载(默认调用)
+     *
+     * @param uri       图片 uri
+     * @param imageView 载体 ImageView 控件
+     */
+    public void asyncLoad(final String uri, final ImageView imageView) {
+        asyncLoad(uri, imageView, 0, 0);
+    }
+
+    /**
+     * 异步加载(可压缩调用)
+     * 实现过程：
+     * 首先先去内存缓存读取图片
+     * 如果读取到就直接返回结果
+     * <p>
+     * 如果读取不到就调用loadBitmap方法，当图片加载成功后再将图片，
+     * 图片的地址以及需要绑定的imageView封装成一个LoaderResult对象，
+     * 然后再通过mMainHandler向主线程发送一条消息，这样就可以在imageView中设置图片了
+     * 之所以通过Handler中转是因为子线程无法直接更新UI
+     * <p>
+     * bindBitmap中用到了线程池和Handler
+     *
+     * @param uri       图片uri
+     * @param imageView 载体 ImageView 控件
+     * @param reqWidth  目标宽度
+     * @param reqHeight 目标高度
+     */
+    public void asyncLoad(final String uri, final ImageView imageView,
+                          final int reqWidth, final int reqHeight) {
+        // 把 uri 作为 tag 绑定到对应的 ImageView 上
+        imageView.setTag(TAG_KEY_URI, uri);
+        Bitmap bitmap = getFromMemory(uri);
+        if (bitmap != null) {
+            imageView.setImageBitmap(bitmap);
+            return;
+        }
+        Runnable bitmapTask = new Runnable() {
+            @Override
+            public void run() {
+                Bitmap bitmap = loadBitmap(uri, reqWidth, reqHeight);
+                if (bitmap != null) {
+                    LoaderResult result = new LoaderResult(imageView, uri, bitmap);
+                    mMainHandler.obtainMessage(MESSAGE_POST_RESULT, result)
+                            .sendToTarget();
+                }
+            }
+        };
+        THREAD_POOL_EXECUTOR.execute(bitmapTask);
+    }
+
+    /**
+     * 同步加载  （从内存缓存、磁盘缓存、网络）
+     * 同步加载的设计步骤：
+     * 先从内存缓存尝试加载图片，找不到就去磁盘缓存拿，磁盘缓存拿不到就去网络拿
+     * 这个方法不能再线程执行，在主线程执行就抛异常（
+     * 有一个检查当前线程的Looper是否为主线程的Looper的判断）
+     *
+     * @param uri       uri
+     * @param reqWidth  目标宽度
+     * @param reqHeight 目标高度
+     * @return Bitmap对象
+     */
+    private Bitmap loadBitmap(String uri, int reqWidth, int reqHeight) {
+        Bitmap bitmap = getFromMemory(uri);
+        if (bitmap != null) {
+            Log.d(TAG, "MemoryCache --> { url : " + uri + " }");
+            return bitmap;
+        }
+        bitmap = getFromDisk(uri, reqWidth, reqHeight);
+        if (bitmap != null) {
+            Log.d(TAG, "DiskCache --> { url : " + uri + " }");
+            return bitmap;
+        }
+        bitmap = loadBitmapFromHttp(uri, reqWidth, reqHeight);
+        Log.d(TAG, "HTTP --> { url:" + uri + " }");
+        if (bitmap == null && !mIsDiskLruCacheCreated) {
+            Log.w(TAG, "Warn --> DiskLruCache is not created!!");
+            bitmap = downloadBitmapFromUrl(uri);
+        }
+        return bitmap;
+    }
+
+    /**
+     * 从 uri 中加载 Bitmap
+     *
+     * @param uri uri
+     * @return Bitmap 对象
+     */
+    private Bitmap downloadBitmapFromUrl(String uri) {
+        Bitmap bitmap = null;
+        HttpURLConnection urlConnection = null;
+        BufferedInputStream in = null;
+        try {
+            final URL url = new URL(uri);
+            urlConnection = (HttpURLConnection) url.openConnection();
+            in = new BufferedInputStream(
+                    urlConnection.getInputStream(),
+                    IO_BUFFER_SIZE
+            );
+            bitmap = BitmapFactory.decodeStream(in);
+        } catch (IOException e) {
+            e.printStackTrace();
+        } finally {
+            if (urlConnection != null) {
+                urlConnection.disconnect();
+            }
+            try {
+                if (in != null) {
+                    in.close();
+                }
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+        return bitmap;
+    }
+
+    private Bitmap loadBitmapFromHttp(String uri, int reqWidth, int reqHeight) {
+        return null;
+    }
+
+    /**
      * 根据文件名，创建 File 文件夹
      *
      * @param context  上下文
@@ -103,7 +260,7 @@ public class ImageLoader {
      * @param key    key值
      * @param bitmap 对应的 bitmap
      */
-    public void addToMemory(String key, Bitmap bitmap) {
+    private void addToMemory(String key, Bitmap bitmap) {
         if (getFromMemory(key) == null) {
             memoryCache.put(key, bitmap);
         }
@@ -165,7 +322,7 @@ public class ImageLoader {
      * @param reqHeight 目标高度
      * @return Bitmap对象
      */
-    public Bitmap getFromDisk(String url, int reqWidth, int reqHeight) {
+    private Bitmap getFromDisk(String url, int reqWidth, int reqHeight) {
         // 判断如果当前是在 UI 线程中,则抛出异常
         if (Looper.myLooper() == Looper.getMainLooper()) {
             throw new RuntimeException("Unable to load bitmap from UI thread!");
@@ -253,8 +410,9 @@ public class ImageLoader {
 
     /**
      * 获取该分区上可用的字节数
+     *
      * @param path 文件路径
-     * @return
+     * @return 可用大小
      */
     @SuppressLint("ObsoleteSdkInt")
     @TargetApi(Build.VERSION_CODES.GINGERBREAD)
@@ -265,4 +423,36 @@ public class ImageLoader {
         final StatFs stats = new StatFs(path.getPath());
         return stats.getBlockSizeLong() * stats.getAvailableBlocksLong();
     }
+
+    /**
+     * 静态内部类，用于存储 Loader 信息
+     */
+    private static class LoaderResult {
+        ImageView imageView;
+        String uri;
+        Bitmap bitmap;
+
+        LoaderResult(ImageView imageView, String uri, Bitmap bitmap) {
+            this.imageView = imageView;
+            this.uri = uri;
+            this.bitmap = bitmap;
+        }
+    }
+
+    private Handler mMainHandler = new Handler(Looper.getMainLooper()) {
+        @Override
+        public void handleMessage(Message msg) {
+            LoaderResult result = (LoaderResult) msg.obj;
+            ImageView imageView = result.imageView;
+            imageView.setImageBitmap(result.bitmap);
+            String uri = (String) imageView.getTag(TAG_KEY_URI);
+            if (uri.equals(result.uri)) {
+                imageView.setImageBitmap(result.bitmap);
+            } else {
+                Log.w(TAG, "set image bitmap,but url has changed, ignored!");
+            }
+        }
+
+        ;
+    };
 }
