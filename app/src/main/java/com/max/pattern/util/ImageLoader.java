@@ -8,7 +8,6 @@ import android.os.Build;
 import android.os.Environment;
 import android.os.Looper;
 import android.os.StatFs;
-import android.support.annotation.NonNull;
 import android.support.v4.util.LruCache;
 
 import com.jakewharton.disklrucache.DiskLruCache;
@@ -18,11 +17,9 @@ import java.io.BufferedOutputStream;
 import java.io.File;
 import java.io.FileDescriptor;
 import java.io.FileInputStream;
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
-import java.net.MalformedURLException;
 import java.net.URL;
 
 /**
@@ -266,6 +263,6 @@ public class ImageLoader {
             return path.getUsableSpace();
         }
         final StatFs stats = new StatFs(path.getPath());
-        return (long) stats.getBlockSize() * (long) stats.getAvailableBlocks();
+        return stats.getBlockSizeLong() * stats.getAvailableBlocksLong();
     }
 }
