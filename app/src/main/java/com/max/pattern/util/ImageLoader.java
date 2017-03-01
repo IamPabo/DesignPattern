@@ -72,7 +72,7 @@ public class ImageLoader {
         }
     };
     // 线程池
-    public static final Executor THREAD_POOL_EXECUTOR =
+    private static final Executor THREAD_POOL_EXECUTOR =
             new ThreadPoolExecutor(
                     CORE_POOL_SIZE, MAXIMUM_POOL_SIZE,
                     KEEP_ALIVE, TimeUnit.SECONDS,
@@ -83,33 +83,8 @@ public class ImageLoader {
     private DiskLruCache diskLruCache;
     private boolean mIsDiskLruCacheCreated = false;
 
-    public ImageLoader(Context context) {
-        memoryCache = new LruCache<String, Bitmap>(cacheSize) {
-            @Override
-            protected int sizeOf(String key, Bitmap bitmap) {
-                return bitmap.getRowBytes() * bitmap.getHeight() / 1024;
-            }
-        };
-        // 获取缓存文件
-        File diskCacheDir = getDiskCacheDir(context, "DiskCache");
-        // 文件不存在 直接创建
-        if (!diskCacheDir.exists()) {
-            diskCacheDir.mkdirs();
-        }
-        // 判断该分区下可提供的空间是否足够
-        if (getUsableSpace(diskCacheDir) > DISK_CACHE_SIZE) {
-            try {
-                diskLruCache = DiskLruCache.open(
-                        diskCacheDir,// 磁盘缓存路径
-                        1,// appVersion 正常设置为 1 即可
-                        1,// 单个 key 对应几个 value 正常设置为1
-                        DISK_CACHE_SIZE// 缓存的总大小
-                );
-                mIsDiskLruCacheCreated = true;
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-        }
+    public static ImageLoader build(Context context) {
+        return new ImageLoader(context);
     }
 
     /**
@@ -163,6 +138,35 @@ public class ImageLoader {
         THREAD_POOL_EXECUTOR.execute(bitmapTask);
     }
 
+    private ImageLoader(Context context) {
+        memoryCache = new LruCache<String, Bitmap>(cacheSize) {
+            @Override
+            protected int sizeOf(String key, Bitmap bitmap) {
+                return bitmap.getRowBytes() * bitmap.getHeight() / 1024;
+            }
+        };
+        // 获取缓存文件
+        File diskCacheDir = getDiskCacheDir(context, "DiskCache");
+        // 文件不存在 直接创建
+        if (!diskCacheDir.exists()) {
+            diskCacheDir.mkdirs();
+        }
+        // 判断该分区下可提供的空间是否足够
+        if (getUsableSpace(diskCacheDir) > DISK_CACHE_SIZE) {
+            try {
+                diskLruCache = DiskLruCache.open(
+                        diskCacheDir,// 磁盘缓存路径
+                        1,// appVersion 正常设置为 1 即可
+                        1,// 单个 key 对应几个 value 正常设置为1
+                        DISK_CACHE_SIZE// 缓存的总大小
+                );
+                mIsDiskLruCacheCreated = true;
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+    }
+
     /**
      * 同步加载  （从内存缓存、磁盘缓存、网络）
      * 同步加载的设计步骤：
@@ -186,8 +190,12 @@ public class ImageLoader {
             Log.d(TAG, "DiskCache --> { url : " + uri + " }");
             return bitmap;
         }
-        bitmap = loadBitmapFromHttp(uri, reqWidth, reqHeight);
-        Log.d(TAG, "HTTP --> { url:" + uri + " }");
+        try {
+            bitmap = loadBitmapFromHttp(uri, reqWidth, reqHeight);
+            Log.d(TAG, "HTTP --> { url:" + uri + " }");
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
         if (bitmap == null && !mIsDiskLruCacheCreated) {
             Log.w(TAG, "Warn --> DiskLruCache is not created!!");
             bitmap = downloadBitmapFromUrl(uri);
@@ -228,10 +236,6 @@ public class ImageLoader {
             }
         }
         return bitmap;
-    }
-
-    private Bitmap loadBitmapFromHttp(String uri, int reqWidth, int reqHeight) {
-        return null;
     }
 
     /**
@@ -312,6 +316,39 @@ public class ImageLoader {
         }
         // 返回缓存成功的 Bitmap 对象
         return getFromDisk(key, reqWidth, reqHeight);
+    }
+
+    /**
+     * 磁盘缓存的添加
+     *
+     * @param url       url
+     * @param reqWidth  目标宽度
+     * @param reqHeight 目标高度
+     * @return 返回 Bitmap 对象
+     * @throws IOException 磁盘缓存的添加：添加需要通过Editor来完成，
+     *                     利用commit和abort方法来提交和撤销操作
+     */
+    private Bitmap loadBitmapFromHttp(String url, int reqWidth, int reqHeight)
+            throws IOException {
+        if (Looper.myLooper() == Looper.getMainLooper()) {
+            throw new RuntimeException("can not visit network from UI Thread.");
+        }
+        if (diskLruCache == null) {
+            return null;
+        }
+
+        String key = MD5Util.hashKeyFormUrl(url);
+        DiskLruCache.Editor editor = diskLruCache.edit(key);
+        if (editor != null) {
+            OutputStream outputStream = editor.newOutputStream(DISK_CACHE_SIZE);
+            if (downloadUrlToStream(url, outputStream)) {
+                editor.commit();
+            } else {
+                editor.abort();
+            }
+            diskLruCache.flush();
+        }
+        return getFromDisk(url, reqWidth, reqHeight);
     }
 
     /**
@@ -452,7 +489,5 @@ public class ImageLoader {
                 Log.w(TAG, "set image bitmap,but url has changed, ignored!");
             }
         }
-
-        ;
     };
 }
