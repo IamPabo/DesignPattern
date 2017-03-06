@@ -17,7 +17,6 @@ import android.util.Log;
 import android.widget.ImageView;
 
 import com.jakewharton.disklrucache.DiskLruCache;
-import com.max.pattern.R;
 
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
@@ -27,7 +26,6 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
-import java.net.MalformedURLException;
 import java.net.URL;
 import java.util.concurrent.Executor;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -466,9 +464,9 @@ public class ImageLoader {
                     IO_BUFFER_SIZE
             );
             int b;
-            // 如果可以读取文件
+            // 从输入流中读取数据
             while ((b = in.read()) != -1) {
-                // 文件流写入 缓冲输出流（BufferedOutputStream）
+                // 向输出流中写入数据
                 out.write(b);
             }
             return true;// 写入成功
